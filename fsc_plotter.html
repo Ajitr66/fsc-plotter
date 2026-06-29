@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FSC Plotter</title>
+<style>
+  :root{
+    --bg:#fbfbf9;
+    --panel:#ffffff;
+    --ink:#1a1a1a;
+    --muted:#6b6b6b;
+    --line:#e3e2dd;
+    --accent:#1f77b4;
+    --thresh:#000000;
+    --shadow:0 1px 3px rgba(0,0,0,.06),0 6px 24px rgba(0,0,0,.05);
+    --mono:'SFMono-Regular',Menlo,Consolas,'Liberation Mono',monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:14px;line-height:1.45;padding:24px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header.title{margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+  header.title h1{
+    font-size:24px;font-weight:680;letter-spacing:-.02em;margin:0 0 4px;
+    color:var(--ink);
+  }
+  header.title p{margin:0;color:var(--muted);font-size:13.5px}
+
+  code{font-family:var(--mono);font-size:.88em;background:#eef3f8;color:#1f6699;
+    padding:2px 6px;border-radius:5px;letter-spacing:0;border:1px solid #dde8f1;font-weight:500}
+
+  /* Dropzone */
+  #drop{
+    position:relative;border:1.5px dashed #cdd6df;border-radius:18px;
+    background:linear-gradient(180deg,#ffffff,#fafcfe);
+    padding:44px 24px;text-align:center;cursor:pointer;transition:.18s ease;
+    box-shadow:var(--shadow);
+  }
+  #drop:hover{border-color:var(--accent);box-shadow:0 4px 14px rgba(31,119,180,.10),0 10px 32px rgba(0,0,0,.06);transform:translateY(-1px)}
+  #drop.drag{border-color:var(--accent);border-style:solid;background:linear-gradient(180deg,#f1f8fd,#e8f3fb)}
+  #drop .drop-icon{width:38px;height:38px;color:var(--accent);margin-bottom:12px;opacity:.85;transition:.18s}
+  #drop:hover .drop-icon{opacity:1;transform:translateY(-2px)}
+  #drop.drag .drop-icon{transform:translateY(-3px) scale(1.05)}
+  #drop .big{font-size:16px;font-weight:600;margin-bottom:5px;color:var(--ink)}
+  #drop .sub{color:var(--muted);font-size:12.5px}
+  #drop .browse{color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+  #drop .fname{margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+  input[type=file]{display:none}
+
+  .grid{display:grid;grid-template-columns:1fr 280px;gap:20px;margin-top:20px;align-items:start}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+  .plot-card{padding:14px}
+  #plot{width:100%;display:block}
+
+  /* Side panel */
+  .panel{padding:16px}
+  .panel h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 12px;font-weight:650}
+  .panel h2:not(:first-child){margin-top:22px}
+
+  .hint{font-size:11.5px;color:var(--muted);margin:-6px 0 10px;font-style:italic}
+
+  .curve-row{display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:8px;cursor:pointer;user-select:none;transition:background .12s}
+  .curve-row:hover{background:#f6f5f1}
+  .curve-row .sw{width:22px;height:0;border-top-width:3px;border-top-style:solid;flex:0 0 22px;border-radius:2px}
+  .curve-row .lbl{flex:1;font-size:13px}
+  .curve-row .eye{flex:0 0 auto;font-size:12px;color:var(--muted);opacity:.55}
+  .curve-row:hover .eye{opacity:.9}
+  .curve-row.off{opacity:.55}
+  .curve-row.off .lbl{text-decoration:line-through}
+  .curve-row.off .eye{opacity:.9}
+  .title-tag{display:inline-block;font-size:9px;background:#1a1a1a;color:#fff;padding:1px 5px;border-radius:4px;margin-left:6px;letter-spacing:.04em;font-weight:600;vertical-align:middle;text-transform:uppercase}
+  .title-tag.inline{margin-left:0;font-style:normal}
+  .curve-row.best{background:#f3f8fc}
+
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  select,button.act{font-family:var(--sans);font-size:13px}
+  select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0}
+  .check input{width:15px;height:15px;accent-color:var(--accent)}
+
+  button.act{
+    width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;background:#fff;
+    cursor:pointer;font-weight:600;transition:.12s;margin-top:6px
+  }
+  button.act:hover{background:#f3f8fc;border-color:var(--accent);color:var(--accent)}
+  button.act.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.act.primary:hover{background:#19659b}
+
+  /* Table */
+  .table-card{margin-top:20px;padding:16px;overflow-x:auto}
+  .table-card h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 4px;font-weight:650}
+  .table-card .note{font-size:11.5px;color:var(--muted);margin:0 0 12px}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{text-align:right;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;border-bottom:1.5px solid var(--line)}
+  td.res{font-family:var(--mono)}
+  .def-tag{font-size:9.5px;background:var(--accent);color:#fff;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:middle;letter-spacing:.03em;font-weight:600}
+  .colordot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle}
+  .hidden{display:none}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:30px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="title">
+    <h1>FSC Plotter</h1>
+    <p>Drop a cryoSPARC <code>FSC.txt</code> export to plot Fourier Shell Correlation curves.</p>
+  </header>
+
+  <div id="drop">
+    <svg class="drop-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 16V4m0 0L8 8m4-4l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="big">Drop your <code>FSC.txt</code> file here</div>
+    <div class="sub">or <span class="browse">click to browse</span> — parses the standard <code>wave_number / frequency / fsc_*</code> export</div>
+    <div class="fname" id="fname"></div>
+    <input type="file" id="file" accept=".txt,.tsv,.csv,text/plain">
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="grid">
+      <div class="card plot-card">
+        <svg id="plot" viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+
+      <div class="card panel">
+        <h2>Curves</h2>
+        <p class="hint">Click a curve to show or hide it. The <span class="title-tag inline">title</span> tag marks the curve setting the plot title resolution.</p>
+        <div id="curveList"></div>
+
+        <div class="field" style="margin-top:14px">
+          <label for="titleSrc">Title resolution from</label>
+          <select id="titleSrc">
+            <option value="__auto">Auto (best resolution)</option>
+          </select>
+        </div>
+
+        <h2>Color scheme</h2>
+        <div class="field">
+          <select id="scheme">
+            <option value="cryosparc">cryoSPARC default (by mask type)</option>
+            <option value="palette">Tableau palette (column order)</option>
+            <option value="grayblue">Gray + blue (plot 3 style)</option>
+            <option value="resmagenta">Blue + magenta (plot 4 style)</option>
+          </select>
+        </div>
+
+        <h2>Options</h2>
+        <label class="check"><input type="checkbox" id="show05"> Show 0.5 threshold line</label>
+        <label class="check"><input type="checkbox" id="show0143" checked> Show 0.143 threshold line</label>
+        <label class="check"><input type="checkbox" id="showHidden"> Include hidden columns</label>
+
+        <h2>Export</h2>
+        <button class="act primary" id="exportPng">Export PNG</button>
+        <button class="act" id="exportSvg">Export SVG</button>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <h2>Resolution at FSC crossings (Å)</h2>
+      <p class="note">cryoSPARC reports the <strong>first crossing</strong> (first point dropping below threshold). Last crossing shown for reference. Resolutions are linearly interpolated in frequency (1/Å) between the two shells straddling the threshold, then converted to Å.</p>
+      <table id="resTable"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- color schemes ---------- */
+// keyed by lowercased display label fragments
+const SCHEMES = {
+  cryosparc: {
+    map: [
+      [/no mask/,            {c:'#1f77b4', d:''}],
+      [/spherical/,          {c:'#ff7f0e', d:''}],
+      [/loose/,              {c:'#2ca02c', d:''}],
+      [/res mask/,           {c:'#1f77b4', d:''}],
+      [/auto-tight.*corr/,   {c:'#e6007e', d:'4 3'}],
+      [/auto-tight/,         {c:'#e6007e', d:''}],
+      [/corrected/,          {c:'#9467bd', d:''}],
+      [/tight/,              {c:'#d62728', d:''}],
+      [/phase random/,       {c:'#7f7f7f', d:'2 3'}],
+    ],
+    fallback:['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2']
+  },
+  palette: {
+    map:[], fallback:['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f']
+  },
+  grayblue: {
+    map:[
+      [/no mask/,     {c:'#888888', d:'2 3'}],
+      [/spherical/,   {c:'#888888', d:'7 3 2 3'}],
+      [/res mask/,    {c:'#1f77b4', d:''}],
+    ],
+    fallback:['#888888','#1f77b4','#444444','#aaaaaa']
+  },
+  resmagenta: {
+    map:[
+      [/res mask/,          {c:'#1f77b4', d:''}],
+      [/auto-tight.*corr/,  {c:'#e6007e', d:'2 3'}],
+      [/auto-tight/,        {c:'#e6007e', d:''}],
+    ],
+    fallback:['#1f77b4','#e6007e','#222222']
+  }
+};
+
+/* ---------- state ---------- */
+let DATA=null; // {freq:[], curves:[{key,label,hidden,values:[]}]}
+let visible={}; // key -> bool
+
+/* ---------- parsing ---------- */
+function parseFSC(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
+  if(lines.length<3) throw new Error('File too short');
+  const keys=lines[0].split('\t');
+  const labels=lines[1].split('\t');
+  // detect freq column
+  let freqIdx=keys.findIndex(k=>/freq/i.test(k));
+  if(freqIdx<0) freqIdx=1;
+  const fscIdx=[];
+  keys.forEach((k,i)=>{ if(/^fsc/i.test(k)||(/mask/i.test(labels[i]||'')&&i!==freqIdx&&i>freqIdx)) fscIdx.push(i); });
+  // fallback: everything after freq col
+  const cols = fscIdx.length? fscIdx : keys.map((_,i)=>i).filter(i=>i>freqIdx);
+
+  const freq=[], curves=cols.map(i=>({
+    key:keys[i], label:(labels[i]||keys[i]).replace(/\s*\(hidden\)\s*/i,'').trim(),
+    hidden:/hidden/i.test(labels[i]||''), values:[]
+  }));
+  for(let r=2;r<lines.length;r++){
+    const p=lines[r].split('\t');
+    const f=parseFloat(p[freqIdx]);
+    if(!isFinite(f)||f<=0) continue;
+    freq.push(f);
+    cols.forEach((ci,j)=>curves[j].values.push(parseFloat(p[ci])));
+  }
+  return {freq,curves};
+}
+
+/* ---------- crossing math ---------- */
+// resolution (Å) = 1/freq. Interpolate the freq where curve crosses `thr`.
+function crossing(freq, vals, thr, mode){
+  // candidates: indices where vals[i] >= thr and vals[i+1] < thr
+  const cross=[];
+  for(let i=0;i<vals.length-1;i++){
+    const a=vals[i], b=vals[i+1];
+    if(isFinite(a)&&isFinite(b)&&a>=thr&&b<thr){
+      const t=(a-thr)/(a-b);
+      const f=freq[i]+t*(freq[i+1]-freq[i]);
+      cross.push(f);
+    }
+  }
+  if(!cross.length) return null;
+  const f = mode==='first'? cross[0] : cross[cross.length-1];
+  return 1/f; // Å
+}
+
+/* ---------- color resolution ---------- */
+function colorFor(label, idx, schemeName){
+  const s=SCHEMES[schemeName];
+  const low=label.toLowerCase();
+  for(const [re,style] of s.map){ if(re.test(low)) return style; }
+  return {c:s.fallback[idx % s.fallback.length], d:''};
+}
+
+/* ---------- plot geometry ---------- */
+const PX={l:62,r:22,t:46,b:74}, PW=760, PH=480;
+const innerW=PW-PX.l-PX.r, innerH=PH-PX.t-PX.b;
+
+function xScale(freq, fmin, fmax){ return PX.l + (freq-fmin)/(fmax-fmin)*innerW; }
+function yScale(v){ return PX.t + (1-Math.max(0,Math.min(1,v)))*innerH; }
+
+// resolution tick labels: evenly spaced in frequency across the file's ACTUAL
+// range. The final tick is pinned exactly to fmax — the highest resolution in
+// the data (right edge of the plot) — so it's always labelled.
+function resTicks(fmin,fmax){
+  const fmtRes=res=>{
+    const s = res>=10 ? res.toFixed(0) : (res>=1 ? res.toFixed(1) : res.toFixed(2));
+    return s+'\u00C5';
+  };
+  const ticks=[{f:fmin,lab:'DC'}];
+  const N=7; // intermediate ticks between DC and the high-res edge
+  for(let k=1;k<N;k++){
+    const f = fmin + (fmax-fmin)*k/N;
+    ticks.push({f:f, lab:fmtRes(1/f)});
+  }
+  // final tick exactly at the highest-resolution point in the file
+  ticks.push({f:fmax, lab:fmtRes(1/fmax), edge:true});
+  return ticks;
+}
+
+function buildPlot(){
+  if(!DATA) return;
+  const fmin=DATA.freq[0], fmax=DATA.freq[DATA.freq.length-1];
+  const scheme=document.getElementById('scheme').value;
+  const show05=document.getElementById('show05').checked;
+  const show0143=document.getElementById('show0143').checked;
+  const showHidden=document.getElementById('showHidden').checked;
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.getElementById('plot');
+  svg.innerHTML='';
+
+  const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+  // bg
+  svg.appendChild(mk('rect',{x:0,y:0,width:PW,height:PH,fill:'#ffffff'}));
+
+  // gridlines y
+  [0,0.2,0.4,0.6,0.8,1.0].forEach(v=>{
+    const y=yScale(v);
+    svg.appendChild(mk('line',{x1:PX.l,y1:y,x2:PW-PX.r,y2:y,stroke:'#ececec','stroke-width':1}));
+    const t=mk('text',{x:PX.l-9,y:y+4,'text-anchor':'end','font-size':13,fill:'#333','font-family':'sans-serif'});
+    t.textContent=v.toFixed(1); svg.appendChild(t);
+  });
+
+  // x ticks
+  const ticks=resTicks(fmin,fmax);
+  ticks.forEach(tk=>{
+    const x=xScale(tk.f,fmin,fmax);
+    svg.appendChild(mk('line',{x1:x,y1:PX.t,x2:x,y2:PH-PX.b,stroke:'#f0f0f0','stroke-width':1}));
+    const t=mk('text',{x:x,y:PH-PX.b+22,'text-anchor':tk.edge?'end':'middle','font-size':13,
+      fill:'#333','font-family':'sans-serif'});
+    t.textContent=tk.lab; svg.appendChild(t);
+  });
+  // x-axis label
+  const xlab=mk('text',{x:PX.l+innerW/2,y:PH-8,'text-anchor':'middle','font-size':15,
+    fill:'#444','font-family':'sans-serif'});
+  xlab.textContent='Resolution (\u00C5)';
+  svg.appendChild(xlab);
+
+  // axes frame
+  svg.appendChild(mk('rect',{x:PX.l,y:PX.t,width:innerW,height:innerH,fill:'none',stroke:'#333','stroke-width':1.2}));
+
+  // threshold lines
+  if(show05){
+    const y=yScale(0.5);
+    svg.appendChild(mk('line',{x1:PX.l,y1:y,x2:PW-PX.r,y2:y,stroke:'#555','stroke-width':1.3,'stroke-dasharray':'6 4'}));
+  }
+  if(show0143){
+    const y=yScale(0.143);
+    svg.appendChild(mk('line',{x1:PX.l,y1:y,x2:PW-PX.r,y2:y,stroke:'#000','stroke-width':2}));
+  }
+
+  // curves
+  const legend=[];
+  DATA.curves.forEach((cv,idx)=>{
+    if(cv.hidden && !showHidden) return;
+    if(visible[cv.key]===false) return;
+    const st=colorFor(cv.label,idx,scheme);
+    let d='';
+    for(let i=0;i<DATA.freq.length;i++){
+      const x=xScale(DATA.freq[i],fmin,fmax), y=yScale(cv.values[i]);
+      d+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)+' ';
+    }
+    const path=mk('path',{d:d,fill:'none',stroke:st.c,'stroke-width':2.2,'stroke-linejoin':'round'});
+    if(st.d) path.setAttribute('stroke-dasharray',st.d);
+    svg.appendChild(path);
+    const res=crossing(DATA.freq,cv.values,0.143,'first');
+    legend.push({label:cv.label,res:res,style:st});
+  });
+
+  // title: exact cryoSPARC format "GSFSC Resolution: X.XXÅ".
+  // Source curve is either auto (best/smallest Å at 0.143 FIRST-crossing among
+  // visible curves) or a specific curve pinned via the Title-source selector.
+  const titleSel = document.getElementById('titleSrc').value;
+  let overall=null, srcLabel=null;
+  if(titleSel && titleSel!=='__auto'){
+    // pinned to a specific curve; use it if it's currently visible & has a value
+    const hit=legend.find(l=>l.label===titleSel);
+    if(hit && hit.res!=null){ overall=hit.res; srcLabel=hit.label; }
+  }
+  if(srcLabel==null){ // auto, or pinned curve unavailable -> best resolution
+    legend.forEach(l=>{ if(l.res!=null && (overall==null||l.res<overall)){ overall=l.res; srcLabel=l.label; } });
+  }
+  window.__titleCurve = srcLabel; // surfaced in the Curves panel
+  const title=mk('text',{x:PW/2,y:26,'text-anchor':'middle','font-size':18,'font-weight':600,fill:'#1a1a1a','font-family':'sans-serif'});
+  title.textContent='GSFSC Resolution: '+(overall!=null?overall.toFixed(2)+'\u00C5':'\u2014');
+  svg.appendChild(title);
+
+  // legend box: width sized to longest entry, right-anchored inside frame
+  if(legend.length){
+    const FS=12, SW=24, GAP=8, PAD=10; // swatch line, gap, inner padding
+    const texts=legend.map(l=>l.label+(l.res!=null?' ('+l.res.toFixed(1)+'\u00C5)':''));
+    // measure text widths precisely via a hidden SVG text node
+    const meas=mk('text',{'font-size':FS,'font-family':'sans-serif',visibility:'hidden'});
+    svg.appendChild(meas);
+    let maxTextW=0;
+    texts.forEach(s=>{ meas.textContent=s; maxTextW=Math.max(maxTextW, meas.getComputedTextLength()); });
+    svg.removeChild(meas);
+    const boxW = PAD + SW + GAP + maxTextW + PAD;
+    const boxH = 18*legend.length + 10;
+    // right edge flush to inner frame, but never spill past it; clamp left to frame too
+    const rightEdge = PW - PX.r - 8;
+    let lx = rightEdge - boxW;
+    if(lx < PX.l + 6) lx = PX.l + 6; // never start left of the plot area
+    const ly = PX.t + 10;
+    svg.appendChild(mk('rect',{x:lx,y:ly,width:boxW,height:boxH,fill:'#ffffff',stroke:'#ccc','stroke-width':1,rx:5,opacity:.95}));
+    legend.forEach((l,i)=>{
+      const yy=ly+15+i*18;
+      const x0=lx+PAD;
+      const ln=mk('line',{x1:x0,y1:yy-3,x2:x0+SW,y2:yy-3,stroke:l.style.c,'stroke-width':2.5});
+      if(l.style.d) ln.setAttribute('stroke-dasharray',l.style.d);
+      svg.appendChild(ln);
+      const t=mk('text',{x:x0+SW+GAP,y:yy,'font-size':FS,fill:'#222','font-family':'sans-serif'});
+      t.textContent=texts[i];
+      svg.appendChild(t);
+    });
+  }
+}
+
+/* ---------- side UI ---------- */
+function buildCurveList(){
+  const scheme=document.getElementById('scheme').value;
+  const showHidden=document.getElementById('showHidden').checked;
+  const best=window.__titleCurve||null;
+  const box=document.getElementById('curveList'); box.innerHTML='';
+  DATA.curves.forEach((cv,idx)=>{
+    if(cv.hidden && !showHidden) return;
+    const st=colorFor(cv.label,idx,scheme);
+    const row=document.createElement('div');
+    const off = visible[cv.key]===false;
+    const isBest = !off && cv.label===best;
+    row.className='curve-row'+(off?' off':'')+(isBest?' best':'');
+    row.innerHTML='<span class="sw" style="border-top-color:'+st.c+(st.d?';border-top-style:dashed':'')+'"></span>'+
+                  '<span class="lbl">'+cv.label+(isBest?'<span class="title-tag">title</span>':'')+'</span>'+
+                  '<span class="eye">'+(off?'hidden':'shown')+'</span>';
+    row.onclick=()=>{ visible[cv.key]=!(visible[cv.key]!==false); render(); };
+    box.appendChild(row);
+  });
+}
+
+function buildTable(){
+  const showHidden=document.getElementById('showHidden').checked;
+  const scheme=document.getElementById('scheme').value;
+  const tbl=document.getElementById('resTable');
+  let h='<tr><th>Curve</th><th>0.5 first</th><th>0.5 last</th><th>0.143 first <span class="def-tag">cryoSPARC</span></th><th>0.143 last</th></tr>';
+  DATA.curves.forEach((cv,idx)=>{
+    if(cv.hidden && !showHidden) return;
+    if(visible[cv.key]===false) return;
+    const st=colorFor(cv.label,idx,scheme);
+    const f5=crossing(DATA.freq,cv.values,0.5,'first');
+    const l5=crossing(DATA.freq,cv.values,0.5,'last');
+    const f1=crossing(DATA.freq,cv.values,0.143,'first');
+    const l1=crossing(DATA.freq,cv.values,0.143,'last');
+    const fmt=v=>v!=null?v.toFixed(2):'\u2014';
+    h+='<tr><td><span class="colordot" style="background:'+st.c+'"></span>'+cv.label+'</td>'+
+       '<td class="res">'+fmt(f5)+'</td><td class="res">'+fmt(l5)+'</td>'+
+       '<td class="res">'+fmt(f1)+'</td><td class="res">'+fmt(l1)+'</td></tr>';
+  });
+  tbl.innerHTML=h;
+}
+
+function render(){ buildPlot(); buildCurveList(); buildTable(); }
+
+/* ---------- export ---------- */
+function exportSVG(){
+  const svg=document.getElementById('plot');
+  const s=new XMLSerializer().serializeToString(svg);
+  const blob=new Blob(['<?xml version="1.0"?>\n'+s],{type:'image/svg+xml'});
+  dl(blob,'fsc_plot.svg');
+}
+function exportPNG(){
+  const svg=document.getElementById('plot');
+  const s=new XMLSerializer().serializeToString(svg);
+  const img=new Image();
+  const url=URL.createObjectURL(new Blob([s],{type:'image/svg+xml'}));
+  img.onload=()=>{
+    const sc=2,cv=document.createElement('canvas');
+    cv.width=PW*sc; cv.height=PH*sc;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.scale(sc,sc); ctx.drawImage(img,0,0);
+    cv.toBlob(b=>{dl(b,'fsc_plot.png');URL.revokeObjectURL(url);});
+  };
+  img.src=url;
+}
+function dl(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+/* ---------- file handling ---------- */
+function populateTitleSrc(){
+  const sel=document.getElementById('titleSrc');
+  const prev=sel.value;
+  sel.innerHTML='<option value="__auto">Auto (best resolution)</option>';
+  DATA.curves.forEach(cv=>{
+    if(cv.hidden && !document.getElementById('showHidden').checked) return;
+    const o=document.createElement('option');
+    o.value=cv.label; o.textContent=cv.label;
+    sel.appendChild(o);
+  });
+  // keep prior selection if still valid, else reset to auto
+  sel.value=[...sel.options].some(o=>o.value===prev)?prev:'__auto';
+}
+
+function loadText(text,name){
+  try{
+    DATA=parseFSC(text);
+    visible={}; DATA.curves.forEach(c=>visible[c.key]=true);
+    document.getElementById('fname').textContent=name||'';
+    document.getElementById('app').classList.remove('hidden');
+    populateTitleSrc();
+    render();
+  }catch(e){
+    alert('Could not parse file: '+e.message);
+  }
+}
+
+const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
+drop.onclick=()=>fileInput.click();
+fileInput.onchange=e=>{const f=e.target.files[0]; if(f){const r=new FileReader(); r.onload=()=>loadText(r.result,f.name); r.readAsText(f);}};
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f){const r=new FileReader(); r.onload=()=>loadText(r.result,f.name); r.readAsText(f);}});
+
+['scheme','show05','show0143'].forEach(id=>document.getElementById(id).addEventListener('change',render));
+document.getElementById('titleSrc').addEventListener('change',render);
+document.getElementById('showHidden').addEventListener('change',()=>{ if(DATA) populateTitleSrc(); render(); });
+document.getElementById('exportPng').onclick=exportPNG;
+document.getElementById('exportSvg').onclick=exportSVG;
+</script>
+</body>
+</html>
