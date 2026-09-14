@@ -99,6 +99,7 @@
   .table-card{margin-top:20px;padding:16px;overflow-x:auto}
   .table-card h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 4px;font-weight:650}
   .table-card .note{font-size:11.5px;color:var(--muted);margin:0 0 12px}
+  .plot-card .note{font-size:11.5px;color:var(--muted);line-height:1.5}
   table{border-collapse:collapse;width:100%;font-size:13px}
   th,td{text-align:right;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
   th:first-child,td:first-child{text-align:left}
@@ -108,6 +109,28 @@
   .colordot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle}
   .hidden{display:none}
   .empty{color:var(--muted);font-size:13px;text-align:center;padding:30px}
+
+  /* Calibration modal */
+  #calibWrap{position:fixed;inset:0;background:rgba(26,26,26,.34);display:flex;
+    align-items:center;justify-content:center;padding:20px;z-index:50}
+  #calibWrap.hidden{display:none}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    box-shadow:0 10px 40px rgba(0,0,0,.18);padding:22px;max-width:420px;width:100%}
+  .modal h3{margin:0 0 6px;font-size:17px;font-weight:650;letter-spacing:-.01em}
+  .modal p.sub{margin:0 0 16px;color:var(--muted);font-size:12.5px;line-height:1.5}
+  .modal .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .modal input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--line);
+    border-radius:8px;font-family:var(--mono);font-size:13px;background:#fff;color:var(--ink)}
+  .modal input[type=number]:focus{outline:none;border-color:var(--accent)}
+  .modal .readout{margin:14px 0 16px;font-size:12px;color:var(--muted);font-family:var(--mono);
+    background:#f6f5f1;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .modal .readout.bad{color:#b3261e;background:#fdf1f0;border-color:#f3d4d1}
+  .modal .btns{display:flex;gap:8px;justify-content:flex-end}
+  .scale-note{font-size:11.5px;color:var(--muted);margin:8px 0 0;line-height:1.45}
+  .panel .field input[type=number]{width:100%;padding:7px 9px;border:1px solid var(--line);
+    border-radius:8px;font-family:var(--mono);font-size:12.5px;background:#fff;color:var(--ink)}
+  .panel .field input[type=number]:focus{outline:none;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -123,7 +146,7 @@
       <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <div class="big">Drop your <code>FSC.txt</code> file here</div>
-    <div class="sub">or <span class="browse">click to browse</span> — parses the standard <code>wave_number / frequency / fsc_*</code> export</div>
+    <div class="sub">or <span class="browse">click to browse</span> — reads both exports: with a <code>frequency</code> column, or <code>wave_number</code> only</div>
     <div class="fname" id="fname"></div>
     <input type="file" id="file" accept=".txt,.tsv,.csv,text/plain">
   </div>
@@ -132,6 +155,7 @@
     <div class="grid">
       <div class="card plot-card">
         <svg id="plot" viewBox="0 0 760 480" xmlns="http://www.w3.org/2000/svg"></svg>
+        <p class="note" id="tickNote" style="margin:10px 4px 2px"></p>
       </div>
 
       <div class="card panel">
@@ -156,6 +180,27 @@
           </select>
         </div>
 
+        <div id="scaleBox" class="hidden">
+          <h2>Scale</h2>
+          <p class="hint">No frequency column in this file. Frequency is computed from the wave number.</p>
+          <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field"><label for="boxSize2">Box size (px)</label>
+              <input type="number" id="boxSize2" min="2" step="2"></div>
+            <div class="field"><label for="apix2">Pixel size (Å)</label>
+              <input type="number" id="apix2" min="0.01" step="0.01"></div>
+          </div>
+          <p class="scale-note" id="scaleNote2"></p>
+        </div>
+
+        <h2>X-axis ticks</h2>
+        <div class="field">
+          <select id="tickMode">
+            <option value="round">Even spacing, rounded labels</option>
+            <option value="snap">Even spacing, true positions</option>
+            <option value="exact">Even spacing, precise labels</option>
+          </select>
+        </div>
+
         <h2>Options</h2>
         <label class="check"><input type="checkbox" id="show05"> Show 0.5 threshold line</label>
         <label class="check"><input type="checkbox" id="show0143" checked> Show 0.143 threshold line</label>
@@ -171,6 +216,26 @@
       <h2>Resolution at FSC crossings (Å)</h2>
       <p class="note">cryoSPARC reports the <strong>first crossing</strong> (first point dropping below threshold). Last crossing shown for reference. Resolutions are linearly interpolated in frequency (1/Å) between the two shells straddling the threshold, then converted to Å.</p>
       <table id="resTable"></table>
+    </div>
+  </div>
+</div>
+
+<div id="calibWrap" class="hidden">
+  <div class="modal">
+    <h3>Box size and pixel size needed</h3>
+    <p class="sub">This file has no <code>frequency</code> column, only <code>wave_number</code>.
+      Give the box size and pixel size of the reconstruction to convert to
+      frequency (1/Å):<br><code>frequency = wave_number / (box × pixel size)</code></p>
+    <div class="row">
+      <div class="field"><label for="boxSize">Box size (px)</label>
+        <input type="number" id="boxSize" min="2" step="2"></div>
+      <div class="field"><label for="apix">Pixel size (Å/px)</label>
+        <input type="number" id="apix" min="0.01" step="0.01" value="1.00"></div>
+    </div>
+    <div class="readout" id="calibOut"></div>
+    <div class="btns">
+      <button class="act" id="calibCancel">Cancel</button>
+      <button class="act primary" id="calibOk">Plot</button>
     </div>
   </div>
 </div>
@@ -215,35 +280,92 @@ const SCHEMES = {
 };
 
 /* ---------- state ---------- */
-let DATA=null; // {freq:[], curves:[{key,label,hidden,values:[]}]}
-let visible={}; // key -> bool
+let DATA=null;    // {wave:[], freq:[], curves:[{key,label,hidden,values:[]}], needsCalib}
+let PENDING=null; // parsed file waiting for box/pixel size
+let PENDING_NAME='';
+let CALIB={box:null, apix:1.0};
+let visible={};   // key -> bool
 
-/* ---------- parsing ---------- */
+/* ---------- column key -> display label ----------
+   Used when the file has no human-readable label row. The label text also
+   drives the color schemes, so it must match the old wording. */
+const KEY_LABELS=[
+  [/^fsc_?nomask/i,                  'No Mask'],
+  [/^fsc_?sphericalmask/i,           'Spherical Mask'],
+  [/^fsc_?loosemask/i,               'Loose Mask'],
+  [/^fsc_?resmask/i,                 'Res Mask'],
+  [/^fsc_?tightmask/i,               'Tight Mask'],
+  [/^fsc_?autotight_?noisesub_?raw/i,'Auto-tight Mask, phase randomized'],
+  [/^fsc_?autotight_?noisesub/i,     'Auto-tight Mask, corrected'],
+  [/^fsc_?autotight/i,               'Auto-tight Mask'],
+  [/^fsc_?noisesub_?raw/i,           'Corrected, phase randomized'],
+  [/^fsc_?noisesub/i,                'Corrected'],
+];
+function labelForKey(k){
+  for(const [re,lab] of KEY_LABELS){ if(re.test(k)) return lab; }
+  return k.replace(/^fsc_?/i,'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).trim()||k;
+}
+
+/* ---------- parsing ----------
+   Two cryoSPARC layouts are supported:
+     A) key row + label row, with a `frequency` column   (9 columns)
+     B) key row only, no `frequency` column              (7 columns)
+   In layout B the frequency is computed later from box size and pixel size. */
+function isDataRow(line){
+  const p=line.split('\t');
+  return p.length>1 && p.every(x=>x.trim()===''||isFinite(parseFloat(x)));
+}
+
 function parseFSC(text){
   const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
-  if(lines.length<3) throw new Error('File too short');
-  const keys=lines[0].split('\t');
-  const labels=lines[1].split('\t');
-  // detect freq column
-  let freqIdx=keys.findIndex(k=>/freq/i.test(k));
-  if(freqIdx<0) freqIdx=1;
-  const fscIdx=[];
-  keys.forEach((k,i)=>{ if(/^fsc/i.test(k)||(/mask/i.test(labels[i]||'')&&i!==freqIdx&&i>freqIdx)) fscIdx.push(i); });
-  // fallback: everything after freq col
-  const cols = fscIdx.length? fscIdx : keys.map((_,i)=>i).filter(i=>i>freqIdx);
+  if(lines.length<2) throw new Error('File too short');
+  const keys=lines[0].split('\t').map(s=>s.trim());
 
-  const freq=[], curves=cols.map(i=>({
-    key:keys[i], label:(labels[i]||keys[i]).replace(/\s*\(hidden\)\s*/i,'').trim(),
-    hidden:/hidden/i.test(labels[i]||''), values:[]
+  // header depth: a second header row is present only if it is not numeric
+  const hdr = isDataRow(lines[1]) ? 1 : 2;
+  const labels = hdr===2 ? lines[1].split('\t') : keys.map(labelForKey);
+  if(hdr===2 && lines.length<3) throw new Error('File has no data rows');
+
+  let waveIdx=keys.findIndex(k=>/wave/i.test(k)); if(waveIdx<0) waveIdx=0;
+  const freqIdx=keys.findIndex(k=>/freq/i.test(k));   // -1 when absent
+  const lastMeta=Math.max(waveIdx,freqIdx);
+
+  const fscIdx=[];
+  keys.forEach((k,i)=>{
+    if(/^fsc/i.test(k) || (/mask/i.test(labels[i]||'') && i>lastMeta)) fscIdx.push(i);
+  });
+  const cols = fscIdx.length? fscIdx : keys.map((_,i)=>i).filter(i=>i>lastMeta);
+  if(!cols.length) throw new Error('No FSC columns found');
+
+  const curves=cols.map(i=>({
+    key:keys[i],
+    label:(labels[i]||labelForKey(keys[i])).replace(/\s*\(hidden\)\s*/i,'').trim(),
+    hidden:/hidden/i.test(labels[i]||'')||/_raw$/i.test(keys[i]),
+    values:[]
   }));
-  for(let r=2;r<lines.length;r++){
+
+  const wave=[], freq=[];
+  for(let r=hdr;r<lines.length;r++){
     const p=lines[r].split('\t');
-    const f=parseFloat(p[freqIdx]);
-    if(!isFinite(f)||f<=0) continue;
-    freq.push(f);
+    const w=parseFloat(p[waveIdx]);
+    if(!isFinite(w)) continue;
+    if(freqIdx>=0){
+      const f=parseFloat(p[freqIdx]);
+      if(!isFinite(f)||f<=0) continue;
+      freq.push(f);
+    }
+    wave.push(w);
     cols.forEach((ci,j)=>curves[j].values.push(parseFloat(p[ci])));
   }
-  return {freq,curves};
+  if(!wave.length) throw new Error('No numeric data rows found');
+
+  return {wave, freq:freqIdx>=0?freq:null, curves, needsCalib:freqIdx<0};
+}
+
+/* frequency (1/Å) from wave number: f = wave / (box * pixel size) */
+function freqFromWave(wave, box, apix){
+  const d=box*apix;
+  return wave.map(w=>w/d);
 }
 
 /* ---------- crossing math ---------- */
@@ -279,22 +401,50 @@ const innerW=PW-PX.l-PX.r, innerH=PH-PX.t-PX.b;
 function xScale(freq, fmin, fmax){ return PX.l + (freq-fmin)/(fmax-fmin)*innerW; }
 function yScale(v){ return PX.t + (1-Math.max(0,Math.min(1,v)))*innerH; }
 
-// resolution tick labels: evenly spaced in frequency across the file's ACTUAL
-// range. The final tick is pinned exactly to fmax — the highest resolution in
-// the data (right edge of the plot) — so it's always labelled.
-function resTicks(fmin,fmax){
-  const fmtRes=res=>{
-    const s = res>=10 ? res.toFixed(0) : (res>=1 ? res.toFixed(1) : res.toFixed(2));
-    return s+'\u00C5';
-  };
+// resolution tick labels. Ticks are evenly spaced in frequency across the
+// file's ACTUAL range, and the final tick is pinned to fmax — the highest
+// resolution in the data. Three label modes:
+//   'round' — evenly spaced ticks, labels rounded (a "12A" tick is really 11.64 A)
+//   'snap'  — each rounded label moves to its true position (12A sits at 12.0 A)
+//   'exact' — evenly spaced ticks, labels to 3 significant figures
+function fmtResRound(res){
+  return (res>=10 ? res.toFixed(0) : (res>=1 ? res.toFixed(1) : res.toFixed(2)));
+}
+function fmtResExact(res){
+  const s=res.toPrecision(3);
+  // below 10 A keep all three significant figures, including a trailing zero
+  // (7.00, 2.40). Above 10 A a trailing zero adds nothing, so drop it.
+  if(res>=10 && s.indexOf('e')<0 && s.indexOf('.')>=0){
+    return s.replace(/0+$/,'').replace(/\.$/,'');
+  }
+  return s;
+}
+function resTicks(fmin,fmax,mode){
+  const A='\u00C5';
   const ticks=[{f:fmin,lab:'DC'}];
   const N=7; // intermediate ticks between DC and the high-res edge
-  for(let k=1;k<N;k++){
-    const f = fmin + (fmax-fmin)*k/N;
-    ticks.push({f:f, lab:fmtRes(1/f)});
+  const raw=[];
+  for(let k=1;k<N;k++) raw.push(fmin+(fmax-fmin)*k/N);
+  raw.push(fmax);
+
+  if(mode==='snap'){
+    // keep the rounded values, but place each one where it really belongs
+    const seen=new Set();
+    raw.forEach(f=>{
+      const v=parseFloat(fmtResRound(1/f));
+      if(!isFinite(v)||v<=0) return;
+      const fs=1/v;
+      if(fs<fmin||fs>fmax) return;          // rounding pushed it off the axis
+      const key=v.toFixed(4);
+      if(seen.has(key)) return;             // two ticks rounded to one value
+      seen.add(key);
+      ticks.push({f:fs, lab:fmtResRound(v)+A});
+    });
+    return ticks;
   }
-  // final tick exactly at the highest-resolution point in the file
-  ticks.push({f:fmax, lab:fmtRes(1/fmax), edge:true});
+
+  const fmt = mode==='exact' ? fmtResExact : fmtResRound;
+  raw.forEach((f,i)=>ticks.push({f:f, lab:fmt(1/f)+A, edge:i===raw.length-1}));
   return ticks;
 }
 
@@ -323,11 +473,13 @@ function buildPlot(){
   });
 
   // x ticks
-  const ticks=resTicks(fmin,fmax);
+  const tickMode=document.getElementById('tickMode').value;
+  const ticks=resTicks(fmin,fmax,tickMode);
   ticks.forEach(tk=>{
     const x=xScale(tk.f,fmin,fmax);
     svg.appendChild(mk('line',{x1:x,y1:PX.t,x2:x,y2:PH-PX.b,stroke:'#f0f0f0','stroke-width':1}));
-    const t=mk('text',{x:x,y:PH-PX.b+22,'text-anchor':tk.edge?'end':'middle','font-size':13,
+    const atEdge = tk.edge || x>PW-PX.r-14;
+    const t=mk('text',{x:x,y:PH-PX.b+22,'text-anchor':atEdge?'end':'middle','font-size':13,
       fill:'#333','font-family':'sans-serif'});
     t.textContent=tk.lab; svg.appendChild(t);
   });
@@ -459,7 +611,38 @@ function buildTable(){
   tbl.innerHTML=h;
 }
 
-function render(){ buildPlot(); buildCurveList(); buildTable(); }
+function updateTickNote(){
+  const el=document.getElementById('tickNote');
+  if(!DATA){ el.textContent=''; return; }
+  const mode=document.getElementById('tickMode').value;
+  const fmin=DATA.freq[0], fmax=DATA.freq[DATA.freq.length-1];
+  const base='The x-axis is linear in spatial frequency (1/\u00C5), so resolution labels are not evenly spaced. ';
+  if(mode==='snap'){
+    el.textContent=base+'Each tick sits at the exact resolution of its label, so tick spacing is uneven and a rounded label may be dropped if it falls outside the data range.';
+    return;
+  }
+  if(mode==='exact'){
+    el.textContent=base+'Ticks are evenly spaced in frequency and each label gives the true resolution at that position, to 3 significant figures.';
+    return;
+  }
+  // rounded mode: report the largest rounding error on the axis
+  let worst=null;
+  resTicks(fmin,fmax,'round').forEach(tk=>{
+    if(tk.lab==='DC') return;
+    const shown=parseFloat(tk.lab), real=1/tk.f;
+    if(!isFinite(shown)) return;
+    const err=Math.abs(real-shown);
+    if(!worst||err>worst.err) worst={shown:tk.lab, real:real, err:err};
+  });
+  let msg=base+'Ticks are evenly spaced in frequency and the labels are rounded, so a label is not exactly at the resolution it names.';
+  if(worst&&worst.err>0.005){
+    msg+=' Here the largest difference is the '+worst.shown+' tick, which is really at '+worst.real.toFixed(2)+'\u00C5.';
+  }
+  msg+=' Switch to true positions or precise labels above to remove the ambiguity.';
+  el.textContent=msg;
+}
+
+function render(){ buildPlot(); buildCurveList(); buildTable(); updateTickNote(); }
 
 /* ---------- export ---------- */
 function exportSVG(){
@@ -504,18 +687,108 @@ function populateTitleSrc(){
   sel.value=[...sel.options].some(o=>o.value===prev)?prev:'__auto';
 }
 
+function commit(d,name){
+  DATA=d;
+  visible={}; DATA.curves.forEach(c=>visible[c.key]=true);
+  document.getElementById('fname').textContent=name||'';
+  document.getElementById('app').classList.remove('hidden');
+  const sb=document.getElementById('scaleBox');
+  if(DATA.needsCalib){
+    sb.classList.remove('hidden');
+    document.getElementById('boxSize2').value=CALIB.box;
+    document.getElementById('apix2').value=CALIB.apix;
+    updateScaleNote();
+  }else{
+    sb.classList.add('hidden');
+  }
+  populateTitleSrc();
+  render();
+}
+
 function loadText(text,name){
   try{
-    DATA=parseFSC(text);
-    visible={}; DATA.curves.forEach(c=>visible[c.key]=true);
-    document.getElementById('fname').textContent=name||'';
-    document.getElementById('app').classList.remove('hidden');
-    populateTitleSrc();
-    render();
+    const d=parseFSC(text);
+    if(d.needsCalib){
+      PENDING=d; PENDING_NAME=name||'';
+      openCalib(d);
+      return;
+    }
+    commit(d,name);
   }catch(e){
     alert('Could not parse file: '+e.message);
   }
 }
+
+/* ---------- calibration (files with wave_number only) ---------- */
+function calibSummary(box,apix,maxWave){
+  if(!isFinite(box)||!isFinite(apix)||box<=0||apix<=0) return {ok:false,txt:'Enter a box size and a pixel size above zero.'};
+  const fmax=maxWave/(box*apix);
+  return {ok:true, txt:'Nyquist '+(2*apix).toFixed(2)+' \u00C5  \u00B7  highest shell in file '+(1/fmax).toFixed(2)+' \u00C5  \u00B7  '+box+' px \u00D7 '+apix+' \u00C5 = '+(box*apix).toFixed(1)+' \u00C5'};
+}
+
+function updateCalibOut(){
+  const box=parseFloat(document.getElementById('boxSize').value);
+  const apix=parseFloat(document.getElementById('apix').value);
+  const maxWave=PENDING?PENDING.wave[PENDING.wave.length-1]:1;
+  const s=calibSummary(box,apix,maxWave);
+  const el=document.getElementById('calibOut');
+  el.textContent=s.txt; el.className='readout'+(s.ok?'':' bad');
+  document.getElementById('calibOk').disabled=!s.ok;
+}
+
+function updateScaleNote(){
+  const box=parseFloat(document.getElementById('boxSize2').value);
+  const apix=parseFloat(document.getElementById('apix2').value);
+  const s=calibSummary(box,apix,DATA.wave[DATA.wave.length-1]);
+  document.getElementById('scaleNote2').textContent=s.txt;
+}
+
+function openCalib(d){
+  // cryoSPARC writes box/2 - 2 shells, so the box is about 2*(rows + 2).
+  // This is only a default — correct it if your box size differs.
+  const guess=2*(d.wave.length+2);
+  document.getElementById('boxSize').value=CALIB.box||guess;
+  document.getElementById('apix').value=CALIB.apix;
+  document.getElementById('calibWrap').classList.remove('hidden');
+  updateCalibOut();
+  document.getElementById('apix').focus();
+  document.getElementById('apix').select();
+}
+
+function applyCalib(box,apix){
+  CALIB={box:box, apix:apix};
+  PENDING.freq=freqFromWave(PENDING.wave,box,apix);
+  document.getElementById('calibWrap').classList.add('hidden');
+  commit(PENDING,PENDING_NAME);
+}
+
+document.getElementById('calibOk').onclick=()=>{
+  const box=parseFloat(document.getElementById('boxSize').value);
+  const apix=parseFloat(document.getElementById('apix').value);
+  if(!calibSummary(box,apix,1).ok) return;
+  applyCalib(box,apix);
+};
+document.getElementById('calibCancel').onclick=()=>{
+  document.getElementById('calibWrap').classList.add('hidden');
+  PENDING=null;
+};
+['boxSize','apix'].forEach(id=>document.getElementById(id).addEventListener('input',updateCalibOut));
+document.getElementById('calibWrap').addEventListener('keydown',e=>{
+  if(e.key==='Enter') document.getElementById('calibOk').click();
+  if(e.key==='Escape') document.getElementById('calibCancel').click();
+});
+
+// live edit of the scale from the side panel
+['boxSize2','apix2'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  const box=parseFloat(document.getElementById('boxSize2').value);
+  const apix=parseFloat(document.getElementById('apix2').value);
+  if(!DATA||!DATA.needsCalib) return;
+  if(!calibSummary(box,apix,1).ok){ updateScaleNote(); return; }
+  CALIB={box:box,apix:apix};
+  DATA.freq=freqFromWave(DATA.wave,box,apix);
+  updateScaleNote();
+  render();
+}));
 
 const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
 drop.onclick=()=>fileInput.click();
@@ -524,7 +797,7 @@ fileInput.onchange=e=>{const f=e.target.files[0]; if(f){const r=new FileReader()
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f){const r=new FileReader(); r.onload=()=>loadText(r.result,f.name); r.readAsText(f);}});
 
-['scheme','show05','show0143'].forEach(id=>document.getElementById(id).addEventListener('change',render));
+['scheme','show05','show0143','tickMode'].forEach(id=>document.getElementById(id).addEventListener('change',render));
 document.getElementById('titleSrc').addEventListener('change',render);
 document.getElementById('showHidden').addEventListener('change',()=>{ if(DATA) populateTitleSrc(); render(); });
 document.getElementById('exportPng').onclick=exportPNG;
