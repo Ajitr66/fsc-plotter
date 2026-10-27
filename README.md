@@ -42,6 +42,7 @@ you'll be asked for the box size and pixel size. The [`examples/`](examples) fol
 
 ## Changelog
 
+- **v1.3.1**: More space below the Copy table and Export CSV buttons.
 - **v1.3**: Copy table and Export CSV for the resolution table.
 - **v1.2**: Custom per-curve colors and line styles.
 - **v1.1**: Reads `wave_number`-only exports. Labels are inferred from column keys,
