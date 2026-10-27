@@ -453,13 +453,10 @@ function fmtResRound(res){
   return (res>=10 ? res.toFixed(0) : (res>=1 ? res.toFixed(1) : res.toFixed(2)));
 }
 function fmtResExact(res){
-  const s=res.toPrecision(3);
-  // below 10 A keep all three significant figures, including a trailing zero
-  // (7.00, 2.40). Above 10 A a trailing zero adds nothing, so drop it.
-  if(res>=10 && s.indexOf('e')<0 && s.indexOf('.')>=0){
-    return s.replace(/0+$/,'').replace(/\.$/,'');
-  }
-  return s;
+  // always three significant figures, trailing zeros included (7.00, 12.0)
+  // so every label carries the same precision. toPrecision switches to
+  // exponent form at 1000 A and up, so fall back to a whole number there.
+  return res>=1000 ? res.toFixed(0) : res.toPrecision(3);
 }
 function resTicks(fmin,fmax,mode){
   const A='\u00C5';

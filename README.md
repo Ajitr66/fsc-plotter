@@ -42,6 +42,7 @@ you'll be asked for the box size and pixel size. The [`examples/`](examples) fol
 
 ## Changelog
 
+- **v1.3.2**: Precise x-axis labels keep trailing zeros, so every label shows 3 significant figures (12.0 Å, not 12 Å).
 - **v1.3.1**: More space below the Copy table and Export CSV buttons.
 - **v1.3**: Copy table and Export CSV for the resolution table.
 - **v1.2**: Custom per-curve colors and line styles.
