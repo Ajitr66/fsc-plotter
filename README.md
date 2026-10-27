@@ -22,6 +22,9 @@ One row per curve: **No Mask** (unmasked), **Spherical**, **Loose**, **Tight**, 
 
 Values are in Å, linearly interpolated in frequency between the two shells either side of the threshold.
 
+**Copy table** puts the values on your clipboard ready to paste into Excel, Google Sheets or a
+document. **Export CSV** saves them as a file. Both include the curves currently shown.
+
 ## Plotting
 
 - FSC curves with optional 0.5 and 0.143 threshold lines, and a cryoSPARC-style
@@ -39,6 +42,7 @@ you'll be asked for the box size and pixel size. The [`examples/`](examples) fol
 
 ## Changelog
 
+- **v1.3**: Copy table and Export CSV for the resolution table.
 - **v1.2**: Custom per-curve colors and line styles.
 - **v1.1**: Reads `wave_number`-only exports. Labels are inferred from column keys,
   `_raw` columns are hidden by default, and there are x-axis tick options.
