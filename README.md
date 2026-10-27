@@ -1,12 +1,40 @@
-# FSC Plotter
+# FSC Plotter: 0.143 and 0.5 FSC resolution for masked and unmasked cryo-EM maps
 
-A single-file, in-browser plotter for cryoSPARC Fourier Shell Correlation (FSC) exports.
-Drop an `FSC.txt` file onto the page to get publication-ready FSC curves and a table of
-resolutions at the 0.5 and 0.143 crossings. Nothing is uploaded; all parsing happens locally.
+**Get the FSC = 0.143 and FSC = 0.5 resolution for every masked and unmasked curve in a
+cryoSPARC FSC export.** FSC Plotter reads a cryoSPARC `FSC.txt` file and reports the
+gold-standard FSC (GSFSC) resolution at the 0.143 and 0.5 thresholds for the unmasked
+(No Mask) curve and each masked curve: Spherical, Loose, Tight, Auto-tight and Corrected.
+It also plots publication-ready Fourier Shell Correlation curves.
+
+It runs entirely in your browser as a single HTML file. Nothing is uploaded and nothing needs installing.
 
 **Try it:** https://ajitr66.github.io/fsc-plotter/
 
-![FSC Plotter screenshot](docs/screenshot.png)
+![FSC Plotter showing cryo-EM FSC curves and a table of 0.143 and 0.5 resolutions for masked and unmasked curves](docs/screenshot.png)
+
+## 0.143 and 0.5 FSC crossings for masked and unmasked curves
+
+Drop in an FSC export and the results table lists, for **every curve**, the resolution (Å)
+where the FSC crosses each threshold:
+
+| Column | What it means |
+| --- | --- |
+| **0.143 first** | First shell where the FSC drops below 0.143. This is the gold-standard resolution cryoSPARC reports. |
+| **0.143 last** | Last 0.143 crossing, which shows whether the curve dips and recovers |
+| **0.5 first** | First 0.5 crossing, often used for map-vs-model FSC or as a conservative estimate |
+| **0.5 last** | Last 0.5 crossing |
+
+Rows cover the unmasked curve and all masked curves in the file:
+
+- **No Mask**: unmasked half-map FSC
+- **Spherical Mask**, **Loose Mask**, **Tight Mask**, **Res Mask**
+- **Auto-tight Mask** and **Auto-tight Mask, corrected** (noise-substitution corrected FSC)
+- Phase-randomized curves, if you tick *Include hidden columns*
+
+Resolutions are linearly interpolated in spatial frequency (1/Å) between the two shells
+either side of the threshold, then converted to Å. The 0.143 first crossing matches
+the value cryoSPARC reports. The plot title shows the GSFSC resolution in cryoSPARC's format
+(`GSFSC Resolution: 3.42Å`). By default it uses the best curve, and you can pin it to a specific mask.
 
 ## Usage
 
@@ -22,9 +50,8 @@ resolutions at the 0.5 and 0.143 crossings. Nothing is uploaded; all parsing hap
 
 - Reads both cryoSPARC export layouts: with a `frequency` column, or `wave_number` only
 - Plots all FSC curves in the export (No Mask, Spherical, Loose, Tight/Auto-tight, Corrected, …)
-- Optional 0.5 and 0.143 threshold lines
-- Resolution table at first and last crossings for each curve
-  (first 0.143 crossing matches what cryoSPARC reports)
+- 0.143 and 0.5 FSC resolution (first and last crossing) for masked and unmasked curves
+- Optional 0.5 and 0.143 threshold lines on the plot
 - Color schemes, including the cryoSPARC default, plus a Custom mode with a color picker
   and line style (solid, dashed, dotted, dash-dot) for each curve
 - X-axis tick options (even spacing with rounded, true-position, or precise labels)
