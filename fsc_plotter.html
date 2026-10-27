@@ -79,6 +79,11 @@
   .title-tag{display:inline-block;font-size:9px;background:#1a1a1a;color:#fff;padding:1px 5px;border-radius:4px;margin-left:6px;letter-spacing:.04em;font-weight:600;vertical-align:middle;text-transform:uppercase}
   .title-tag.inline{margin-left:0;font-style:normal}
   .curve-row.best{background:#f3f8fc}
+  .curve-row input[type=color]{width:24px;height:20px;flex:0 0 24px;padding:0;border:1px solid var(--line);
+    border-radius:4px;background:none;cursor:pointer}
+  .curve-row input[type=color]::-webkit-color-swatch-wrapper{padding:1px}
+  .curve-row input[type=color]::-webkit-color-swatch{border:none;border-radius:3px}
+  .curve-row select.dash{width:auto;flex:0 0 auto;padding:2px 4px;font-size:11px;border-radius:6px}
 
   .field{margin-bottom:12px}
   .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
@@ -177,8 +182,10 @@
             <option value="palette">Tableau palette (column order)</option>
             <option value="grayblue">Gray + blue (plot 3 style)</option>
             <option value="resmagenta">Blue + magenta (plot 4 style)</option>
+            <option value="custom">Custom (pick per curve)</option>
           </select>
         </div>
+        <p class="hint hidden" id="customHint">Set each curve's color and line style in the Curves list above. Starts from the last preset you used.</p>
 
         <div id="scaleBox" class="hidden">
           <h2>Scale</h2>
@@ -285,6 +292,8 @@ let PENDING=null; // parsed file waiting for box/pixel size
 let PENDING_NAME='';
 let CALIB={box:null, apix:1.0};
 let visible={};   // key -> bool
+let CUSTOM={};    // key -> {c,d}, used by the 'custom' scheme
+let LAST_PRESET='cryosparc'; // preset the custom colors are seeded from
 
 /* ---------- column key -> display label ----------
    Used when the file has no human-readable label row. The label text also
@@ -394,6 +403,22 @@ function colorFor(label, idx, schemeName){
   return {c:s.fallback[idx % s.fallback.length], d:''};
 }
 
+// line styles offered in custom mode; preset dashes map onto the closest one
+const DASHES=[['','Solid'],['4 3','Dashed'],['2 3','Dotted'],['7 3 2 3','Dash-dot']];
+
+// style for a curve under the current scheme. Custom colors are seeded
+// from the last preset the first time a curve is seen.
+function styleFor(cv, idx){
+  const scheme=document.getElementById('scheme').value;
+  if(scheme!=='custom') return colorFor(cv.label,idx,scheme);
+  if(!CUSTOM[cv.key]){
+    const st=colorFor(cv.label,idx,LAST_PRESET);
+    const d=DASHES.some(x=>x[0]===st.d) ? st.d : (st.d?'4 3':'');
+    CUSTOM[cv.key]={c:st.c, d:d};
+  }
+  return CUSTOM[cv.key];
+}
+
 /* ---------- plot geometry ---------- */
 const PX={l:62,r:22,t:46,b:74}, PW=760, PH=480;
 const innerW=PW-PX.l-PX.r, innerH=PH-PX.t-PX.b;
@@ -451,7 +476,6 @@ function resTicks(fmin,fmax,mode){
 function buildPlot(){
   if(!DATA) return;
   const fmin=DATA.freq[0], fmax=DATA.freq[DATA.freq.length-1];
-  const scheme=document.getElementById('scheme').value;
   const show05=document.getElementById('show05').checked;
   const show0143=document.getElementById('show0143').checked;
   const showHidden=document.getElementById('showHidden').checked;
@@ -507,7 +531,7 @@ function buildPlot(){
   DATA.curves.forEach((cv,idx)=>{
     if(cv.hidden && !showHidden) return;
     if(visible[cv.key]===false) return;
-    const st=colorFor(cv.label,idx,scheme);
+    const st=styleFor(cv,idx);
     let d='';
     for(let i=0;i<DATA.freq.length;i++){
       const x=xScale(DATA.freq[i],fmin,fmax), y=yScale(cv.values[i]);
@@ -571,34 +595,46 @@ function buildPlot(){
 
 /* ---------- side UI ---------- */
 function buildCurveList(){
-  const scheme=document.getElementById('scheme').value;
   const showHidden=document.getElementById('showHidden').checked;
   const best=window.__titleCurve||null;
   const box=document.getElementById('curveList'); box.innerHTML='';
   DATA.curves.forEach((cv,idx)=>{
     if(cv.hidden && !showHidden) return;
-    const st=colorFor(cv.label,idx,scheme);
+    const st=styleFor(cv,idx);
     const row=document.createElement('div');
     const off = visible[cv.key]===false;
     const isBest = !off && cv.label===best;
+    const custom=document.getElementById('scheme').value==='custom';
     row.className='curve-row'+(off?' off':'')+(isBest?' best':'');
-    row.innerHTML='<span class="sw" style="border-top-color:'+st.c+(st.d?';border-top-style:dashed':'')+'"></span>'+
+    row.innerHTML=(custom
+                    ? '<input type="color" value="'+st.c+'" title="Curve color">'
+                    : '<span class="sw" style="border-top-color:'+st.c+(st.d?';border-top-style:dashed':'')+'"></span>')+
                   '<span class="lbl">'+cv.label+(isBest?'<span class="title-tag">title</span>':'')+'</span>'+
-                  '<span class="eye">'+(off?'hidden':'shown')+'</span>';
+                  (custom
+                    ? '<select class="dash" title="Line style">'+
+                        DASHES.map(([d,n])=>'<option value="'+d+'"'+(d===st.d?' selected':'')+'>'+n+'</option>').join('')+
+                      '</select>'
+                    : '<span class="eye">'+(off?'hidden':'shown')+'</span>');
     row.onclick=()=>{ visible[cv.key]=!(visible[cv.key]!==false); render(); };
+    if(custom){
+      // edits redraw the plot and table only, so the open color picker isn't rebuilt
+      const pick=row.querySelector('input[type=color]'), dash=row.querySelector('select.dash');
+      [pick,dash].forEach(el=>el.addEventListener('click',e=>e.stopPropagation()));
+      pick.addEventListener('input',()=>{ CUSTOM[cv.key].c=pick.value; buildPlot(); buildTable(); });
+      dash.addEventListener('change',()=>{ CUSTOM[cv.key].d=dash.value; buildPlot(); buildTable(); });
+    }
     box.appendChild(row);
   });
 }
 
 function buildTable(){
   const showHidden=document.getElementById('showHidden').checked;
-  const scheme=document.getElementById('scheme').value;
   const tbl=document.getElementById('resTable');
   let h='<tr><th>Curve</th><th>0.5 first</th><th>0.5 last</th><th>0.143 first <span class="def-tag">cryoSPARC</span></th><th>0.143 last</th></tr>';
   DATA.curves.forEach((cv,idx)=>{
     if(cv.hidden && !showHidden) return;
     if(visible[cv.key]===false) return;
-    const st=colorFor(cv.label,idx,scheme);
+    const st=styleFor(cv,idx);
     const f5=crossing(DATA.freq,cv.values,0.5,'first');
     const l5=crossing(DATA.freq,cv.values,0.5,'last');
     const f1=crossing(DATA.freq,cv.values,0.143,'first');
@@ -797,6 +833,11 @@ fileInput.onchange=e=>{const f=e.target.files[0]; if(f){const r=new FileReader()
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0]; if(f){const r=new FileReader(); r.onload=()=>loadText(r.result,f.name); r.readAsText(f);}});
 
+document.getElementById('scheme').addEventListener('change',e=>{
+  const v=e.target.value;
+  if(v!=='custom') LAST_PRESET=v;
+  document.getElementById('customHint').classList.toggle('hidden',v!=='custom');
+});
 ['scheme','show05','show0143','tickMode'].forEach(id=>document.getElementById(id).addEventListener('change',render));
 document.getElementById('titleSrc').addEventListener('change',render);
 document.getElementById('showHidden').addEventListener('change',()=>{ if(DATA) populateTitleSrc(); render(); });
