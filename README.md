@@ -50,6 +50,11 @@ you'll be asked for the box size and pixel size. The [`examples/`](examples) fol
   `_raw` columns are hidden by default, and there are x-axis tick options.
 - **v1.0**: First release.
 
+## Credits
+
+Created by Ajit Ramamohan ([@Ajitr66](https://github.com/Ajitr66)).
+Developed with assistance from Claude (Anthropic).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
